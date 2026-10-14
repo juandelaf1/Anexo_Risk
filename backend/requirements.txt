@@ -4,6 +4,9 @@ pydantic>=2.9
 requests>=2.31
 python-dotenv>=1.0
 python-multipart>=0.0.9
+python-jose>=3.3.0
+passlib>=1.7.4
+bcrypt>=4.0.1
 
 # GeoData Engine
 h3>=4.0.0

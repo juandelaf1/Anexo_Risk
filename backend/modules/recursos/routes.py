@@ -52,7 +52,7 @@ def get_res(resource_id: int):
     return res
 
 
-@router.post("", response_model=ResourceResponse, status_code=201, dependencies=[Depends(requiere_clave_organizador)])
+@router.post("", response_model=ResourceResponse, status_code=201, dependencies=[Depends(get_current_active_user)])
 def create_res(data: ResourceCreate):
     return create_resource(
         data.organization_id,
@@ -65,7 +65,7 @@ def create_res(data: ResourceCreate):
     )
 
 
-@router.patch("/{resource_id}", response_model=ResourceResponse, dependencies=[Depends(requiere_clave_organizador)])
+@router.patch("/{resource_id}", response_model=ResourceResponse, dependencies=[Depends(get_current_active_user)])
 def update_res(resource_id: int, data: ResourceUpdate):
     res = update_resource(
         resource_id,

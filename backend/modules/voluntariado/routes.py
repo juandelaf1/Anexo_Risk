@@ -26,6 +26,8 @@ from modules.voluntariado.models import (
     list_volunteers_for_frontend,
     update_coordination_status,
 )
+from modules.auth.auth_service import get_current_active_user, get_current_user
+
 from modules.voluntariado.schemas import (
     VolunteerActionResponse,
     VolunteerAvailabilityUpdate,
@@ -73,7 +75,7 @@ def get_volunteers(
 @router.get(
     "/pendientes",
     response_model=list[VolunteerPendingResponse],
-    dependencies=[Depends(requiere_clave_organizador)],
+    dependencies=[Depends(get_current_active_user)],
 )
 def get_pending_volunteers():
     """Lista solicitudes pendientes de validación (solo administrador)."""
@@ -225,7 +227,7 @@ def reject_volunteer_from_email(
 @router.post(
     "/{volunteer_id}/aprobar",
     response_model=VolunteerActionResponse,
-    dependencies=[Depends(requiere_clave_organizador)],
+    dependencies=[Depends(get_current_active_user)],
 )
 def approve_volunteer_from_api(volunteer_id: int):
     """Aprueba una solicitud pendiente usando la clave de organizador."""
@@ -249,7 +251,7 @@ def approve_volunteer_from_api(volunteer_id: int):
 @router.post(
     "/{volunteer_id}/rechazar",
     response_model=VolunteerActionResponse,
-    dependencies=[Depends(requiere_clave_organizador)],
+    dependencies=[Depends(get_current_active_user)],
 )
 def reject_volunteer_from_api(volunteer_id: int):
     """Rechaza una solicitud pendiente usando la clave de organizador."""
@@ -272,7 +274,7 @@ def reject_volunteer_from_api(volunteer_id: int):
 @router.patch(
     "/{volunteer_id}",
     response_model=VolunteerFrontendResponse,
-    dependencies=[Depends(requiere_clave_organizador)],
+    dependencies=[Depends(get_current_active_user)],
 )
 
 def update_volunteer_coordination_status(

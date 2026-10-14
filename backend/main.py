@@ -57,6 +57,7 @@ from modules.accessibility.routes import router as accessibility_router
 from modules.action_areas.routes import router as action_areas_router
 from modules.alert_policies.routes import router as alert_policies_router
 from modules.live_dashboard.routes import router as live_dashboard_router
+from modules.auth.routes import router as auth_router
 from middleware.rate_limit import RateLimitMiddleware
 
 app = FastAPI(
@@ -107,6 +108,7 @@ app.include_router(accessibility_router)  # Fase 10 — Accessibility/routing
 app.include_router(action_areas_router)  # Fase 11 — Dynamic action areas
 app.include_router(alert_policies_router)  # Fase 12 — Alert policies
 app.include_router(live_dashboard_router)  # Fase 14 — Live dashboard
+app.include_router(auth_router)  # Autenticación JWT
 
 # Inicializar la base de datos (ejecuta esquemas y migraciones automáticamente)
 init_db()

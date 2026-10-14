@@ -39,7 +39,7 @@ def get_org(org_id: int):
     return org
 
 
-@router.post("", response_model=OrganizationResponse, status_code=201, dependencies=[Depends(requiere_clave_organizador)])
+@router.post("", response_model=OrganizationResponse, status_code=201, dependencies=[Depends(get_current_active_user)])
 def create_org(data: OrganizationCreate):
     return create_organization(data.name, data.type, data.region)
 
@@ -49,7 +49,7 @@ def list_users(org_id: int, role: str | None = None):
     return list_operational_users(org_id=org_id, role=role)
 
 
-@router.post("/{org_id}/users", response_model=OperationalUserResponse, status_code=201, dependencies=[Depends(requiere_clave_organizador)])
+@router.post("/{org_id}/users", response_model=OperationalUserResponse, status_code=201, dependencies=[Depends(get_current_active_user)])
 def create_user(org_id: int, data: OperationalUserCreate):
     org = get_organization(org_id)
     if not org:
