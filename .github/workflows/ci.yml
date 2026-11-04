@@ -33,7 +33,7 @@ jobs:
 
       - name: Instalar dependencias
         env:
-          DATABASE_URL: sqlite:///./backend/anexo_risk.db
+          DATABASE_URL: sqlite:///./anexo_risk.db
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -41,13 +41,13 @@ jobs:
 
       - name: Verificar imports de anexo_risk
         env:
-          DATABASE_URL: sqlite:///./backend/anexo_risk.db
+          DATABASE_URL: sqlite:///./anexo_risk.db
         run: |
           python -c "from main import app; print('OK', app.title)"
 
       - name: Poblar datos de demostración
         env:
-          DATABASE_URL: sqlite:///./backend/anexo_risk.db
+          DATABASE_URL: sqlite:///./anexo_risk.db
         working-directory: backend
         run: |
           PYTHONPATH=. python db/seed.py
