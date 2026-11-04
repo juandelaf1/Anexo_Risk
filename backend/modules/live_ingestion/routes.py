@@ -1,13 +1,17 @@
 """Live Ingestion API endpoints."""
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from services.live_ingestion import ingestion_service
 from services.source_health import get_source_freshness_summary, classify_freshness
 
 router = APIRouter(prefix="/api/live", tags=["live-data"])
 
 
-@router.post("/ingest")
+@router.post(
+    "/ingest",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def trigger_ingestion(
     sources: Optional[str] = Query(None, description="Comma-separated source IDs"),
     timeout: int = Query(30, ge=5, le=120),
@@ -17,7 +21,10 @@ def trigger_ingestion(
     return ingestion_service.ingest_all(sources=source_list, timeout_per_source=timeout)
 
 
-@router.get("/ingest/{source_id}")
+@router.get(
+    "/ingest/{source_id}",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def ingest_single_source(
     source_id: str,
     timeout: int = Query(30, ge=5, le=120),

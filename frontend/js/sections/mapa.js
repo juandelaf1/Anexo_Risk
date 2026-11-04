@@ -7,7 +7,7 @@ import {
   normalizeNecesidades,
   normalizeDonaciones,
 } from "../core/normalization/index.js";
-import { API_BASE, apiGet, matchesRegion, escapeHtml } from "../shared/config.js";
+import { API_BASE, apiGet, apiPost, apiPatch, matchesRegion, escapeHtml } from "../shared/config.js";
 import { notifyCritical } from "./alertas.js";
 
 export function initMap() {
@@ -185,11 +185,7 @@ export function initMap() {
 
   window.cambiarEstadoNecesidad = async (id, estado) => {
     try {
-      await fetch(`${API_BASE}/api/necesidades/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado }),
-      });
+      await apiPatch(`/api/necesidades/${id}`, { estado });
       await loadNeeds();
     } catch (e) { console.error(e); }
   };
@@ -599,10 +595,7 @@ export function initMap() {
       latitud: parseFloat(lat), longitud: parseFloat(lng),
     };
     try {
-      await fetch(`${API_BASE}/api/necesidades`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      await apiPost("/api/necesidades", payload);
       document.getElementById("need-form").reset();
       document.querySelectorAll(".anr-categoria-btn").forEach(b => { b.classList.remove("active"); b.setAttribute("aria-pressed", "false"); });
       selectedTipo = null;

@@ -1,13 +1,18 @@
 """Network Links API endpoints."""
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from modules.network_links import models as link_models
 from modules.network_links.schemas import LinkCreate, LinkUpdate
 
 router = APIRouter(prefix="/api/links", tags=["network-links"])
 
 
-@router.post("", status_code=201)
+@router.post(
+    "",
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_link(data: LinkCreate):
     """Create a new network link."""
     link_dict = data.model_dump()
@@ -76,7 +81,10 @@ def get_link(link_id: str):
     return link
 
 
-@router.put("/{link_id}")
+@router.put(
+    "/{link_id}",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def update_link(link_id: str, data: LinkUpdate):
     """Update a network link."""
     link = link_models.get_link(link_id)
@@ -88,7 +96,10 @@ def update_link(link_id: str, data: LinkUpdate):
     return link_models.update_link(link_id, updates)
 
 
-@router.delete("/{link_id}")
+@router.delete(
+    "/{link_id}",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def delete_link(link_id: str):
     """Close a network link (soft delete)."""
     link = link_models.get_link(link_id)

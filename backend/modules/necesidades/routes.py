@@ -8,8 +8,10 @@ título por defecto. Para eso usamos services.py, que a su vez habla
 con models.py.
 """
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
+
+from modules.auth.auth_service import require_roles
 
 # routes.py solo habla con services.py (nunca con models.py directamente),
 # para que reglas como "título por defecto" no se puedan saltar por accidente.
@@ -123,6 +125,7 @@ def get_need_by_id(need_id: int):
     "",
     response_model=NeedResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("ciudadano", "organizador", "admin"))],
 )
 def create_new_need(need: NeedCreate):
     """Valida y registra una necesidad nueva.
@@ -144,6 +147,7 @@ def create_new_need(need: NeedCreate):
 @router.patch(
     "/{need_id}",
     response_model=NeedResponse,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
     responses={
         # Documentamos el error que se produce cuando el identificador
         # recibido no corresponde a ninguna necesidad.

@@ -2,7 +2,9 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from modules.auth.auth_service import require_roles
 
 from modules.incidentes.models import (
     create_incident,
@@ -65,7 +67,12 @@ def get_incident_by_id(incident_id: int):
     return incident
 
 
-@router.post("", response_model=IncidentResponse, status_code=201)
+@router.post(
+    "",
+    response_model=IncidentResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_new_incident(incident: IncidentCreate):
     """Create a new incident and record the detection in the timeline."""
     created = create_incident(
@@ -97,7 +104,11 @@ def create_new_incident(incident: IncidentCreate):
     return created
 
 
-@router.patch("/{incident_id}", response_model=IncidentResponse)
+@router.patch(
+    "/{incident_id}",
+    response_model=IncidentResponse,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def update_incident(incident_id: int, update: IncidentStatusUpdate):
     """Update incident status."""
     existing = get_incident(incident_id)
@@ -110,7 +121,11 @@ def update_incident(incident_id: int, update: IncidentStatusUpdate):
     return updated
 
 
-@router.patch("/{incident_id}/scores", response_model=IncidentResponse)
+@router.patch(
+    "/{incident_id}/scores",
+    response_model=IncidentResponse,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def update_scores(
     incident_id: int,
     priority_score: Optional[float] = Query(None),
@@ -134,7 +149,10 @@ def get_timeline(incident_id: int, limit: int = Query(100, ge=1, le=500)):
     return {"incident_id": incident_id, "events": events}
 
 
-@router.post("/{incident_id}/analyze")
+@router.post(
+    "/{incident_id}/analyze",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def analyze_incident(incident_id: int):
     """Build decision context, update scores, and record analysis in timeline.
 
@@ -215,7 +233,10 @@ def analyze_incident(incident_id: int):
     }
 
 
-@router.post("/{incident_id}/resolve")
+@router.post(
+    "/{incident_id}/resolve",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def resolve_incident(incident_id: int):
     """Mark incident as resolved and record outcome for feedback loop."""
     existing = get_incident(incident_id)
@@ -253,7 +274,11 @@ def resolve_incident(incident_id: int):
     return {"incident_id": incident_id, "status": "resuelto"}
 
 
-@router.post("/{incident_id}/needs", status_code=201)
+@router.post(
+    "/{incident_id}/needs",
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_need_for_incident(incident_id: int, need: NeedCreate):
     """Create a need linked to this incident and record in timeline."""
     existing = get_incident(incident_id)

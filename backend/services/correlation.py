@@ -186,3 +186,66 @@ def create_incident_from_cluster(
 
     stored = event_models.store_event(incident_event)
     return stored
+
+
+
+def correlate_earthquakes(events):
+    """Agrupa eventos sismicos de distintas fuentes que representan el mismo sismo.
+
+    Solo se correlacionan eventos con event_type == "earthquake". Dos eventos
+    de la misma fuente nunca se fusionan. La fusion requiere proximidad espacial
+    (dentro de DEFAULT_DISTANCE_KM).
+
+    Devuelve una lista de grupos, cada uno con:
+      - source_count: numero de fuentes distintas.
+      - sources: lista ordenada de fuentes.
+      - correlation_quality: "high" (>=3), "medium" (2) o "low" (1).
+      - source_events: eventos originales que componen el grupo.
+    """
+    earthquakes = [
+        e for e in (events or [])
+        if e.get("event_type") == "earthquake"
+        and e.get("lat") is not None
+        and e.get("lon") is not None
+    ]
+
+    clusters = []
+    for evt in earthquakes:
+        matched = None
+        for cluster in clusters:
+            if evt.get("source") in cluster["sources"]:
+                continue
+            for se in cluster["source_events"]:
+                if haversine_km(
+                    evt["lat"], evt["lon"], se["lat"], se["lon"]
+                ) <= DEFAULT_DISTANCE_KM:
+                    matched = cluster
+                    break
+            if matched is not None:
+                break
+
+        if matched is not None:
+            matched["source_events"].append(evt)
+            matched["sources"].add(evt.get("source"))
+        else:
+            clusters.append({
+                "source_events": [evt],
+                "sources": {evt.get("source")},
+            })
+
+    result = []
+    for cluster in clusters:
+        sc = len(cluster["sources"])
+        if sc >= 3:
+            quality = "high"
+        elif sc >= 2:
+            quality = "medium"
+        else:
+            quality = "low"
+        result.append({
+            "source_count": sc,
+            "sources": sorted(cluster["sources"]),
+            "correlation_quality": quality,
+            "source_events": cluster["source_events"],
+        })
+    return result

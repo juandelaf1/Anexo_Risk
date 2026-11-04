@@ -11,6 +11,7 @@ import { initDecisionCenter, loadDecisionContext, loadIncidentDecisionContext } 
 import { renderRiskCard } from "./sections/risk-card.js";
 import { renderTimeline } from "./sections/timeline.js";
 import { updateFreshness } from "./sections/freshness.js";
+import { login, logout, isAuthenticated, getCurrentUser } from "./shared/auth.js";
 
 window._updateFreshness = updateFreshness;
 
@@ -202,6 +203,44 @@ function updateStatusBar(data) {
   set("sb-resources", _statusBarData.resources);
 }
 window._updateStatusBar = updateStatusBar;
+
+// --- AUTH WIDGET ---
+async function updateAuthButton() {
+  const btn = document.getElementById("auth-btn");
+  if (!btn) return;
+  const user = getCurrentUser();
+  if (isAuthenticated() && user) {
+    btn.textContent = `👤 ${user.username || "user"}`;
+    btn.title = "Cerrar sesión";
+  } else {
+    btn.textContent = "👤";
+    btn.title = "Iniciar sesión";
+  }
+}
+
+window.toggleAuth = async () => {
+  if (isAuthenticated()) {
+    if (confirm("¿Cerrar sesión?")) {
+      logout();
+      updateAuthButton();
+    }
+    return;
+  }
+  const username = prompt("Usuario:");
+  if (!username) return;
+  const password = prompt("Contraseña:");
+  if (!password) return;
+  try {
+    await login(username, password);
+    updateAuthButton();
+    alert("Sesión iniciada");
+  } catch (e) {
+    alert("Error de login: " + e.message);
+  }
+};
+
+// Update button on load
+setTimeout(updateAuthButton, 100);
 
 // --- BOOT ---
 document.addEventListener("DOMContentLoaded", () => {

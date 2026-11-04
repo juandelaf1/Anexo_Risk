@@ -7,6 +7,7 @@ modelos de cada módulo (necesidades, voluntariado, donaciones, personas).
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from modules.auth.auth_service import require_roles
 from typing import List, Dict, Any
 import sqlite3
 from sync.services import process_sync_batch
@@ -45,7 +46,11 @@ class SyncBatchResponse(BaseModel):
     results: List[SyncResult]
 
 
-@router.post("/batch", response_model=SyncBatchResponse)
+@router.post(
+    "/batch",
+    response_model=SyncBatchResponse,
+    dependencies=[Depends(require_roles("ciudadano", "organizador", "admin"))],
+)
 def sync_offline_batch(request: SyncBatchRequest, db: sqlite3.Connection = Depends(get_db)):
     """Recibe un lote de operaciones offline, las procesa y devuelve el estado de cada una."""
     try:

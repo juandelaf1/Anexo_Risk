@@ -1,5 +1,5 @@
 -- Crea la tabla de usuarios para autenticación JWT
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
@@ -11,7 +11,7 @@ CREATE TABLE users (
 );
 
 -- Crea la tabla de tokens de refresco
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     token TEXT NOT NULL UNIQUE,
@@ -21,7 +21,7 @@ CREATE TABLE refresh_tokens (
 );
 
 -- Crea la tabla de roles
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     description TEXT,
@@ -29,13 +29,13 @@ CREATE TABLE roles (
 );
 
 -- Inserta roles por defecto
-INSERT INTO roles (name, description) VALUES
+INSERT OR IGNORE INTO roles (name, description) VALUES
     ('ciudadano', 'Usuario regular'),
     ('organizador', 'Usuario con permisos de organización'),
     ('admin', 'Usuario administrador con todos los permisos');
 
 -- Crea la tabla de permisos
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     description TEXT,
@@ -43,7 +43,7 @@ CREATE TABLE permissions (
 );
 
 -- Crea la tabla de roles_permissions
-CREATE TABLE roles_permissions (
+CREATE TABLE IF NOT EXISTS roles_permissions (
     role_id INTEGER NOT NULL,
     permission_id INTEGER NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -53,7 +53,7 @@ CREATE TABLE roles_permissions (
 );
 
 -- Crea la tabla de usuarios_roles
-CREATE TABLE users_roles (
+CREATE TABLE IF NOT EXISTS users_roles (
     user_id INTEGER NOT NULL,
     role_id INTEGER NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -63,7 +63,7 @@ CREATE TABLE users_roles (
 );
 
 -- Inserta permisos por defecto
-INSERT INTO permissions (name, description) VALUES
+INSERT OR IGNORE INTO permissions (name, description) VALUES
     ('create_need', 'Crear necesidades'),
     ('update_need', 'Actualizar necesidades'),
     ('delete_need', 'Eliminar necesidades'),
@@ -78,7 +78,7 @@ INSERT INTO permissions (name, description) VALUES
     ('delete_user', 'Eliminar usuarios');
 
 -- Asigna permisos a roles
-INSERT INTO roles_permissions (role_id, permission_id) VALUES
+INSERT OR IGNORE INTO roles_permissions (role_id, permission_id) VALUES
     ((SELECT id FROM roles WHERE name = 'ciudadano'), (SELECT id FROM permissions WHERE name = 'create_need')),
     ((SELECT id FROM roles WHERE name = 'ciudadano'), (SELECT id FROM permissions WHERE name = 'update_need')),
     ((SELECT id FROM roles WHERE name = 'ciudadano'), (SELECT id FROM permissions WHERE name = 'delete_need')),

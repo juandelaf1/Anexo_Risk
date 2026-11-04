@@ -74,8 +74,19 @@ class DonationStatusUpdate(BaseModel):
     status: DonationStatus = Field(alias="estado")
 
 
-class DonationResponse(DonationBase):
+class DonationResponse(BaseModel):
+    """Respuesta pública de donación.
+
+    No expone datos personales sensibles (contacto, DNI) para evitar
+    filtración de información personal en endpoints públicos.
+    """
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     id: int = Field(gt=0)
+    donation_type: DonationType = Field(alias="tipo")
+    resource: DonationResource = Field(alias="recurso")
+    quantity: str = Field(default="", alias="cantidad")
+    description: str = Field(default="", alias="descripcion")
     status: DonationStatus = Field(alias="estado")
     created_at: datetime = Field(alias="creado_en")
     latitud: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)

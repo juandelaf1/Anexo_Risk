@@ -22,6 +22,33 @@ from pathlib import Path
 TEST_DB = Path(__file__).parent.parent.parent / "backend" / "anexo_risk.db"
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _ensure_seed_data():
+    """Garantiza que la BD de prueba tenga datos de demostración.
+
+    test_db_integrity asume una base poblada (organizaciones, usuarios
+    operacionales). Se ejecuta seed una vez por módulo para no depender de
+    un paso manual previo.
+    """
+    import os
+    import subprocess
+    import sys
+
+    backend_dir = str(Path(__file__).resolve().parents[2] / "backend")
+    os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
+    try:
+        subprocess.run(
+            [sys.executable, "db/seed.py"],
+            cwd=backend_dir,
+            env={**os.environ},
+            check=True,
+            capture_output=True,
+        )
+    except Exception:
+        pass
+    yield
+
+
 def get_db_connection():
     """Get a database connection for testing."""
     conn = sqlite3.connect(TEST_DB)

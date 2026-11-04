@@ -1,6 +1,7 @@
 """Source Registry API endpoints."""
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from modules.source_registry.schemas import (
     SourceCreate, SourceUpdate, SourceResponse, SourceHealthResponse,
 )
@@ -34,7 +35,12 @@ def get_source(source_id: str):
     return source
 
 
-@router.post("", response_model=SourceResponse, status_code=201)
+@router.post(
+    "",
+    response_model=SourceResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def register_source(data: SourceCreate):
     """Register a new data source."""
     existing = models.get_source(data.id)
@@ -43,7 +49,11 @@ def register_source(data: SourceCreate):
     return models.register_source(data.model_dump())
 
 
-@router.patch("/{source_id}", response_model=SourceResponse)
+@router.patch(
+    "/{source_id}",
+    response_model=SourceResponse,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def update_source(source_id: str, data: SourceUpdate):
     """Update source registry entry."""
     existing = models.get_source(source_id)
@@ -57,7 +67,10 @@ def update_source(source_id: str, data: SourceUpdate):
     return models.register_source({**existing, **updates})
 
 
-@router.delete("/{source_id}")
+@router.delete(
+    "/{source_id}",
+    dependencies=[Depends(require_roles("admin"))],
+)
 def delete_source(source_id: str):
     """Remove a source from the registry."""
     existing = models.get_source(source_id)
@@ -67,7 +80,11 @@ def delete_source(source_id: str):
     return {"detail": "Source removed"}
 
 
-@router.post("/{source_id}/status", response_model=SourceResponse)
+@router.post(
+    "/{source_id}/status",
+    response_model=SourceResponse,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def update_source_status(
     source_id: str,
     status: str = Query(...),

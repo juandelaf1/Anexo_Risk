@@ -1,6 +1,7 @@
 """Operational Nodes API endpoints."""
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from modules.operational_nodes import models as node_models
 from modules.operational_nodes.schemas import NodeCreate, NodeUpdate
 from services.h3_mesh import index_event, cells_in_radius
@@ -8,7 +9,11 @@ from services.h3_mesh import index_event, cells_in_radius
 router = APIRouter(prefix="/api/nodes", tags=["operational-nodes"])
 
 
-@router.post("", status_code=201)
+@router.post(
+    "",
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_node(data: NodeCreate):
     """Create a new operational node."""
     node_dict = data.model_dump()
@@ -94,7 +99,10 @@ def get_node(node_id: str):
     return node
 
 
-@router.put("/{node_id}")
+@router.put(
+    "/{node_id}",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def update_node(node_id: str, data: NodeUpdate):
     """Update an operational node."""
     node = node_models.get_node(node_id)
@@ -106,7 +114,10 @@ def update_node(node_id: str, data: NodeUpdate):
     return node_models.update_node(node_id, updates)
 
 
-@router.delete("/{node_id}")
+@router.delete(
+    "/{node_id}",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def delete_node(node_id: str):
     """Soft-delete an operational node."""
     node = node_models.get_node(node_id)

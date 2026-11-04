@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from modules.donaciones import models
 from modules.donaciones.schemas import (
     DonationCreate,
@@ -6,6 +6,7 @@ from modules.donaciones.schemas import (
     DonationStatusUpdate,
     DonationType,
 )
+from modules.auth.auth_service import require_roles
 
 router = APIRouter(prefix="/api/donaciones", tags=["donaciones"])
 
@@ -23,7 +24,12 @@ def get_donation(donation_id: int):
     return donation
 
 
-@router.post("", response_model=DonationResponse, status_code=201)
+@router.post(
+    "",
+    response_model=DonationResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("ciudadano", "organizador", "admin"))],
+)
 def create_donation(donation: DonationCreate):
     if donation.necesidad_id is not None:
         result = models.create_donation_for_need(donation, donation.necesidad_id)
@@ -33,7 +39,11 @@ def create_donation(donation: DonationCreate):
     return models.create_donation(donation)
 
 
-@router.patch("/{donation_id}/estado", response_model=DonationResponse)
+@router.patch(
+    "/{donation_id}/estado",
+    response_model=DonationResponse,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def update_donation_status(donation_id: int, change: DonationStatusUpdate):
     donation = models.update_status(donation_id, change.status)
     if donation is None:

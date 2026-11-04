@@ -1,0 +1,1 @@
+"""Modelos de persistencia transversales."""

@@ -1,6 +1,10 @@
 """Routes para Recursos."""
 from fastapi import APIRouter, Depends, HTTPException, Query
-from middleware.auth import requiere_clave_organizador
+from modules.auth.auth_service import (
+    User,
+    get_user_organization_id,
+    require_roles,
+)
 
 from modules.recursos.models import (
     create_resource,
@@ -12,6 +16,25 @@ from modules.recursos.models import (
 from modules.recursos.schemas import ResourceCreate, ResourceResponse, ResourceUpdate
 
 router = APIRouter(prefix="/api/resources", tags=["resources"])
+
+
+def _assert_organization_scope(current_user: User, organization_id: int | None) -> None:
+    """Impide que un organizador modifique recursos de otra organización.
+
+    Si el usuario no tiene una organización operacional vinculada, se permite
+    la operación (compatibilidad con cuentas antiguas). La vinculación se
+    resuelve con `operational_users.username`, no con una tabla nueva.
+    """
+    if current_user.role == "admin":
+        return
+    user_org_id = get_user_organization_id(current_user.username)
+    if user_org_id is None:
+        return
+    if organization_id != user_org_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No puede modificar recursos de otra organización",
+        )
 
 
 @router.get("", response_model=list[ResourceResponse])
@@ -52,8 +75,12 @@ def get_res(resource_id: int):
     return res
 
 
-@router.post("", response_model=ResourceResponse, status_code=201, dependencies=[Depends(get_current_active_user)])
-def create_res(data: ResourceCreate):
+@router.post("", response_model=ResourceResponse, status_code=201)
+def create_res(
+    data: ResourceCreate,
+    current_user: User = Depends(require_roles("organizador", "admin")),
+):
+    _assert_organization_scope(current_user, data.organization_id)
     return create_resource(
         data.organization_id,
         data.type,
@@ -65,8 +92,16 @@ def create_res(data: ResourceCreate):
     )
 
 
-@router.patch("/{resource_id}", response_model=ResourceResponse, dependencies=[Depends(get_current_active_user)])
-def update_res(resource_id: int, data: ResourceUpdate):
+@router.patch("/{resource_id}", response_model=ResourceResponse)
+def update_res(
+    resource_id: int,
+    data: ResourceUpdate,
+    current_user: User = Depends(require_roles("organizador", "admin")),
+):
+    existing = get_resource(resource_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado")
+    _assert_organization_scope(current_user, existing.get("organization_id"))
     res = update_resource(
         resource_id,
         available_quantity=data.available_quantity,

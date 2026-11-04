@@ -28,6 +28,14 @@ def client():
 
     test_app = FastAPI()
     test_app.include_router(routes.router)
+
+    from modules.auth.auth_service import User, get_current_active_user, get_current_user
+
+    def _fake_user():
+        return User(username="test-user", email="test@example.invalid", role="admin", is_active=True)
+
+    test_app.dependency_overrides[get_current_active_user] = _fake_user
+    test_app.dependency_overrides[get_current_user] = _fake_user
     return TestClient(test_app)
 
 

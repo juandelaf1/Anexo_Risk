@@ -1,12 +1,52 @@
 // Centralized API config and shared utilities
 import { SeverityLevel } from "../core/normalization/index.js";
 
+import { authHeaders } from "./auth.js";
+
 export const API_BASE = "";
 
 export async function apiGet(path) {
-  const resp = await fetch(`${API_BASE}${path}`);
+  const resp = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   if (!resp.ok) throw new Error(`GET ${path} -> ${resp.status}`);
   return resp.json();
+}
+
+async function _throwIfNotOk(resp, method, path) {
+  if (resp.ok) return;
+  let detail = "";
+  try { const j = await resp.json(); detail = j.detail || JSON.stringify(j); } catch (e) {}
+  const err = new Error(detail || `${method} ${path} -> ${resp.status}`);
+  err.status = resp.status;
+  throw err;
+}
+
+export async function apiPost(path, body) {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+  await _throwIfNotOk(resp, "POST", path);
+  return resp.json();
+}
+
+export async function apiPatch(path, body) {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+  await _throwIfNotOk(resp, "PATCH", path);
+  return resp.json();
+}
+
+export async function apiDelete(path) {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  await _throwIfNotOk(resp, "DELETE", path);
+  return resp.status === 204 ? null : resp.json().catch(() => null);
 }
 
 export function formatDate(isoString) {

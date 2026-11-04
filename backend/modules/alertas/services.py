@@ -263,7 +263,7 @@ def set_alert_status(alert_id: str, action: str) -> Dict[str, Any]:
 
     with get_cursor() as cur:
         cur.execute(
-            """UPDATE alertas SET status=?, is_active=?, risk_level=?, severity=?
+            """UPDATE alertas SET status=?, is_active=?, risk_level=?, severidad=?
                WHERE id=? OR external_id=?""",
             (
                 target["status"],

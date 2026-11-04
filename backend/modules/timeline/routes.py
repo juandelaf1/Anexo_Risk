@@ -1,8 +1,9 @@
 """Timeline API — records and queries lifecycle events."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from modules.auth.auth_service import require_roles
 from modules.timeline.models import (
     get_incident_timeline,
     get_recent_events,
@@ -16,7 +17,12 @@ from modules.timeline.schemas import (
 router = APIRouter(prefix="/api/timeline", tags=["timeline"])
 
 
-@router.post("", response_model=TimelineEventResponse, status_code=201)
+@router.post(
+    "",
+    response_model=TimelineEventResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_timeline_event(event: TimelineEventCreate):
     """Record a new timeline event."""
     from modules.incidentes.models import get_incident

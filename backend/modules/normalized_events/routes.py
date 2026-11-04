@@ -1,6 +1,7 @@
 """Normalized Events API endpoints."""
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from modules.normalized_events.schemas import (
     NormalizedEventCreate, NormalizedEventResponse,
     EventBatchCreate, EventBatchResponse,
@@ -50,13 +51,23 @@ def get_event(event_id: str):
     return event
 
 
-@router.post("", response_model=NormalizedEventResponse, status_code=201)
+@router.post(
+    "",
+    response_model=NormalizedEventResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_event(data: NormalizedEventCreate):
     """Store a normalized event."""
     return models.store_event(data.model_dump())
 
 
-@router.post("/batch", response_model=EventBatchResponse, status_code=201)
+@router.post(
+    "/batch",
+    response_model=EventBatchResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_events_batch(data: EventBatchCreate):
     """Store multiple events."""
     events = [e.model_dump() for e in data.events]
@@ -64,7 +75,10 @@ def create_events_batch(data: EventBatchCreate):
     return EventBatchResponse(stored=len(stored), total=len(events))
 
 
-@router.delete("/{event_id}")
+@router.delete(
+    "/{event_id}",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def deactivate_event(event_id: str):
     """Soft-deactivate an event."""
     event = models.get_event(event_id)

@@ -1,5 +1,5 @@
 // Decision Center — loads context from backend, renders progressive disclosure sections
-import { API_BASE, apiGet, escapeHtml } from "../shared/config.js";
+import { API_BASE, apiGet, apiPost, escapeHtml } from "../shared/config.js";
 import { renderRiskCard } from "./risk-card.js";
 import { renderTimeline } from "./timeline.js";
 
@@ -527,19 +527,13 @@ window.showCreateNeedForm = (incidentId) => {
       longitud: inc?.lon || 0,
     };
     try {
-      const resp = await fetch(`${API_BASE}/api/incidents/${incidentId}/needs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (resp.ok) {
-        container.innerHTML = '<div style="padding:var(--space-sm);color:var(--success);font-size:var(--text-sm);font-weight:600;">✓ Necesidad creada</div>';
-        setTimeout(() => { container.style.display = "none"; }, 2000);
-        window._refreshIncidents?.();
-      } else {
-        alert("Error creando necesidad");
-      }
-    } catch (err) { alert("Error: " + err.message); }
+      await apiPost(`/api/incidents/${incidentId}/needs`, payload);
+      container.innerHTML = '<div style="padding:var(--space-sm);color:var(--success);font-size:var(--text-sm);font-weight:600;">Necesidad creada</div>';
+      setTimeout(() => { container.style.display = "none"; }, 2000);
+      window._refreshIncidents?.();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
   });
 };
 

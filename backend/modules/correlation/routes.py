@@ -1,13 +1,17 @@
 """Event Correlation API endpoints."""
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from services.correlation import correlate_events, create_incident_from_cluster
 from modules.normalized_events import models as event_models
 
 router = APIRouter(prefix="/api/correlation", tags=["correlation"])
 
 
-@router.post("/run")
+@router.post(
+    "/run",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def run_correlation(
     source: Optional[str] = Query(None, description="Filter by source"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),

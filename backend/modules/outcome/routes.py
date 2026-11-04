@@ -2,8 +2,9 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from modules.auth.auth_service import require_roles
 from models.feedback import (
     get_feedback_entries,
     get_feedback_stats,
@@ -15,7 +16,11 @@ from modules.outcome.schemas import OutcomeCreate, OutcomeUpdate
 router = APIRouter(prefix="/api/outcomes", tags=["outcomes"])
 
 
-@router.post("/prediction", status_code=201)
+@router.post(
+    "/prediction",
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_prediction(outcome: OutcomeCreate):
     """Record a prediction for later outcome tracking."""
     result = record_prediction(
@@ -35,7 +40,10 @@ def create_prediction(outcome: OutcomeCreate):
     return result
 
 
-@router.patch("/{feedback_id}/record")
+@router.patch(
+    "/{feedback_id}/record",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def record_operational_outcome(feedback_id: int, outcome: OutcomeUpdate):
     """Record the operational outcome for a prediction."""
     result = record_outcome(

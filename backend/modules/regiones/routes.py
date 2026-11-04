@@ -1,6 +1,7 @@
 """Region/AOI API endpoints."""
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from modules.regiones.schemas import (
     RegionCreate, RegionUpdate, RegionResponse,
     RegionSourceCreate, RegionSourceResponse,
@@ -42,7 +43,12 @@ def get_region(region_id: str):
     return region
 
 
-@router.post("", response_model=RegionResponse, status_code=201)
+@router.post(
+    "",
+    response_model=RegionResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def create_region(data: RegionCreate):
     """Create a new region/AOI."""
     existing = models.get_region(data.id)
@@ -51,7 +57,11 @@ def create_region(data: RegionCreate):
     return models.create_region(data.model_dump())
 
 
-@router.patch("/{region_id}", response_model=RegionResponse)
+@router.patch(
+    "/{region_id}",
+    response_model=RegionResponse,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def update_region(region_id: str, data: RegionUpdate):
     """Update a region."""
     existing = models.get_region(region_id)
@@ -65,7 +75,11 @@ def update_region(region_id: str, data: RegionUpdate):
     return models.update_region(region_id, updates)
 
 
-@router.delete("/{region_id}", response_model=RegionResponse)
+@router.delete(
+    "/{region_id}",
+    response_model=RegionResponse,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def delete_region(region_id: str):
     """Soft-delete a region (set is_active=0)."""
     existing = models.get_region(region_id)
@@ -92,7 +106,12 @@ def get_region_sources(region_id: str):
     return models.get_region_sources(region_id)
 
 
-@router.post("/{region_id}/sources", response_model=list[RegionSourceResponse], status_code=201)
+@router.post(
+    "/{region_id}/sources",
+    response_model=list[RegionSourceResponse],
+    status_code=201,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def add_region_source(region_id: str, data: RegionSourceCreate):
     """Link a source to a region."""
     existing = models.get_region(region_id)
@@ -103,7 +122,10 @@ def add_region_source(region_id: str, data: RegionSourceCreate):
     )
 
 
-@router.delete("/{region_id}/sources/{source_id}")
+@router.delete(
+    "/{region_id}/sources/{source_id}",
+    dependencies=[Depends(require_roles("admin"))],
+)
 def remove_region_source(region_id: str, source_id: str):
     """Remove a source from a region."""
     existing = models.get_region(region_id)

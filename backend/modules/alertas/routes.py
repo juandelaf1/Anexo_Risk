@@ -1,9 +1,10 @@
 """API router for alert endpoints using Spanish routes and parameters."""
 
 from typing import Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from modules.alertas.schemas import AlertCreate, AlertResponse, EventTypeEnum, SeverityEnum
 from modules.alertas.services import create_manual_alert, list_filtered_alerts, set_alert_status
+from modules.auth.auth_service import require_roles
 
 router = APIRouter(prefix="/api/alertas", tags=["alertas"])
 
@@ -62,14 +63,23 @@ def get_alerts(
     )
 
 
-@router.post("", response_model=AlertResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=AlertResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_alert(payload: AlertCreate) -> Dict:
     """Creates a new manual alert item with spatial polygon delimitation."""
     _validate_polygon_geojson(payload.zone)
     return create_manual_alert(payload.model_dump())
 
 
-@router.post("/{alert_id}/activar", response_model=AlertResponse)
+@router.post(
+    "/{alert_id}/activar",
+    response_model=AlertResponse,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def activate_alert(alert_id: str) -> Dict:
     """Activates a specific alert by its identifier."""
     try:
@@ -78,7 +88,11 @@ def activate_alert(alert_id: str) -> Dict:
         raise HTTPException(status_code=404, detail="Alerta no encontrada")
 
 
-@router.post("/{alert_id}/alto-riesgo", response_model=AlertResponse)
+@router.post(
+    "/{alert_id}/alto-riesgo",
+    response_model=AlertResponse,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def set_high_risk_alert(alert_id: str) -> Dict:
     """Marks an alert as high risk (risk_level=high) and sets its status to active."""
     try:
@@ -87,7 +101,11 @@ def set_high_risk_alert(alert_id: str) -> Dict:
         raise HTTPException(status_code=404, detail="Alerta no encontrada")
 
 
-@router.post("/{alert_id}/desactivar", response_model=AlertResponse)
+@router.post(
+    "/{alert_id}/desactivar",
+    response_model=AlertResponse,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def deactivate_alert(alert_id: str) -> Dict:
     """Deactivates a specific alert by its identifier."""
     try:

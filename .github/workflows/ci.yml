@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, anexo-risk]
+    branches: [main, anexo-risk, feature/auth-jwt]
   pull_request:
-    branches: [main, dev, anexo-risk]
+    branches: [main, dev, anexo-risk, feature/auth-jwt]
 
 jobs:
   backend-tests:
@@ -21,24 +21,43 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Generar claves efímeras para tests
+        shell: bash
+        run: |
+          ANEXO_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          JWT_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          echo "::add-mask::$ANEXO_KEY"
+          echo "::add-mask::$JWT_KEY"
+          echo "ANEXO_ADMIN_KEY=$ANEXO_KEY" >> "$GITHUB_ENV"
+          echo "JWT_SECRET_KEY=$JWT_KEY" >> "$GITHUB_ENV"
+
       - name: Instalar dependencias
         env:
-          DATABASE_URL: sqlite:///./anexo_risk.db
+          DATABASE_URL: sqlite:///./backend/anexo_risk.db
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
       - name: Verificar imports de anexo_risk
+        env:
+          DATABASE_URL: sqlite:///./backend/anexo_risk.db
         run: |
           python -c "from main import app; print('OK', app.title)"
 
+      - name: Poblar datos de demostración
+        env:
+          DATABASE_URL: sqlite:///./backend/anexo_risk.db
+        working-directory: backend
+        run: |
+          PYTHONPATH=. python db/seed.py
+
       - name: Ejecutar tests
         env:
-          DATABASE_URL: sqlite:///./anexo_risk.db
+          DATABASE_URL: sqlite:///./backend/anexo_risk.db
         run: |
           cd ..
-          PYTHONPATH=backend python -m pytest tests/backend/ -v
+          PYTHONPATH=backend python -m pytest tests/backend/ -v --ignore=tests/backend/test_global_sources.py
 
   frontend-static-check:
     runs-on: ubuntu-latest

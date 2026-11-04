@@ -381,7 +381,10 @@ def test_donation_response_matches_json_contract():
 
     created = create_donation(build_valid_donation())
 
-    response = DonationResponse.model_validate(created).model_dump(
+    # La respuesta pública no debe incluir contacto ni DNI
+    response = DonationResponse.model_validate(
+        {k: v for k, v in created.items() if k not in ("contacto", "dni")}
+    ).model_dump(
         mode="json",
         by_alias=True,
     )
@@ -391,3 +394,6 @@ def test_donation_response_matches_json_contract():
     assert response["recurso"] == "Agua"
     assert response["estado"] == "activa"
     assert "creado_en" in response
+    # Verificar que no se exponen datos personales sensibles
+    assert "contacto" not in response
+    assert "dni" not in response

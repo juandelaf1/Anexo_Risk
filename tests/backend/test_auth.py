@@ -1,309 +1,311 @@
+"""Pruebas de autenticación JWT con persistencia real en SQLite.
+
+No se sustituyen `get_user`/`create_user` por mocks: cada prueba usa una base
+de datos temporal creada con las migraciones del proyecto.
+"""
+from datetime import timedelta
+
 import pytest
 from fastapi.testclient import TestClient
-import sys
-import os
-os.environ["ANEXO_ADMIN_KEY"] = "test-key"
-os.environ["JWT_SECRET_KEY"] = "test-secret"
-os.environ["JWT_ALGORITHM"] = "HS256"
-os.environ["JWT_ACCESS_TOKEN_EXPIRE_MINUTES"] = "30"
-os.environ["JWT_REFRESH_TOKEN_EXPIRE_DAYS"] = "7"
-sys.path.append("C:\\Users\\JUAN\\Desktop\\Proyectos\\Anexo_Risk_limpio\\backend")
-from main import app
-from modules.auth.auth_service import get_current_active_user, get_current_user, create_access_token, create_refresh_token, verify_password, get_password_hash, pwd_context, oauth2_scheme, TokenData, User, UserInDB, UserCreate, Token
-from modules.auth.routes import router as auth_router
 
-app.include_router(auth_router, prefix="/api/auth")
+pytestmark = pytest.mark.no_auth_override
+
 
 @pytest.fixture
-def test_user():
-    return {
-        "username": "testuser",
-        "email": "test@example.com",
-        "password": "testpassword",
-        "role": "ciudadano"
-    }
+def db_path(tmp_path, monkeypatch):
+    from db import database
 
-def test_register(test_user):
-    response = client.post("/api/auth/register", json=test_user)
-    assert response.status_code == 201
-    assert "access_token" in response.json()
-    assert "refresh_token" in response.json()
+    path = tmp_path / "auth_test.db"
+    monkeypatch.setattr(database, "DATABASE_PATH", str(path))
+    database.init_db()
+    yield path
 
 
-def test_login(test_user):
-    # Primero registramos un usuario
-    client.post("/api/auth/register", json=test_user)
-    
-    # Luego intentamos hacer login
-    response = client.post(
-        "/api/auth/login",
-        data={"username": test_user["username"], "password": test_user["password"]}
+@pytest.fixture
+def client(db_path):
+    from main import app
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def _register(
+    client: TestClient,
+    username: str = "alice",
+    email: str | None = None,
+    password: str = "password123",
+    role: str = "ciudadano",
+):
+    return client.post(
+        "/api/auth/register",
+        json={
+            "username": username,
+            "email": email or f"{username}@example.invalid",
+            "password": password,
+            "role": role,
+        },
     )
+
+
+def _login(client: TestClient, username: str = "alice", password: str = "password123"):
+    return client.post(
+        "/api/auth/login",
+        data={"username": username, "password": password},
+    )
+
+
+def _create_user(
+    username: str,
+    role: str,
+    password: str = "password123",
+    is_active: bool = True,
+):
+    from db.database import get_connection
+    from modules.auth.auth_service import UserCreate, create_user
+
+    user = create_user(
+        UserCreate(
+            username=username,
+            email=f"{username}@example.invalid",
+            password=password,
+            role=role,
+        ),
+        allow_privileged=True,
+    )
+    if not is_active:
+        conn = get_connection()
+        try:
+            conn.execute("UPDATE users SET is_active = 0 WHERE username = ?", (username,))
+            conn.commit()
+        finally:
+            conn.close()
+    return user
+
+
+def _token(client: TestClient, username: str = "alice", password: str = "password123") -> str:
+    response = _login(client, username, password)
+    assert response.status_code == 200, response.text
+    return response.json()["access_token"]
+
+
+# ── Registro y persistencia ────────────────────────────────────────────────
+
+def test_register_persists_user_and_hashes_password(client):
+    response = _register(client)
+    assert response.status_code == 201, response.text
+
+    from db.database import get_connection
+    from modules.auth.auth_service import verify_password
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT username, email, password_hash, role, is_active FROM users WHERE username = ?",
+            ("alice",),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row["username"] == "alice"
+    assert row["email"] == "alice@example.invalid"
+    assert row["role"] == "ciudadano"
+    assert bool(row["is_active"]) is True
+    assert row["password_hash"] != "password123"
+    assert verify_password("password123", row["password_hash"]) is True
+
+
+def test_duplicate_registration_is_rejected(client):
+    assert _register(client).status_code == 201
+    response = _register(client)
+    assert response.status_code == 400
+
+
+# ── Login ──────────────────────────────────────────────────────────────────
+
+def test_login_with_valid_password_returns_token(client):
+    _register(client)
+    response = _login(client)
     assert response.status_code == 200
-    assert "access_token" in response.json()
+    body = response.json()
+    assert body["access_token"]
+    assert body["token_type"] == "bearer"
+    assert body.get("refresh_token")
 
 
-def test_me(test_user):
-    # Registramos un usuario
-    register_response = client.post("/api/auth/register", json=test_user)
-    access_token = register_response.json()["access_token"]
-    
-    # Obtenemos información del usuario
+def test_login_with_wrong_password_is_rejected(client):
+    _register(client)
+    response = _login(client, password="wrong-password")
+    assert response.status_code == 401
+
+
+def test_login_with_nonexistent_user_is_rejected(client):
+    response = _login(client, username="nobody")
+    assert response.status_code == 401
+
+
+# ── Tokens ─────────────────────────────────────────────────────────────────
+
+def test_invalid_token_is_rejected(client):
     response = client.get(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {access_token}"}
-    )
-    assert response.status_code == 200
-    assert response.json()["username"] == test_user["username"]
-
-
-def test_refresh_token(test_user):
-    # Registramos un usuario
-    register_response = client.post("/api/auth/register", json=test_user)
-    refresh_token = register_response.json()["refresh_token"]
-    
-    # Refrescamos el token
-    response = client.post(
-        "/api/auth/refresh",
-        json={"refresh_token": refresh_token}
-    )
-    assert response.status_code == 200
-    assert "access_token" in response.json()
-
-
-def test_invalid_credentials(test_user):
-    # Intentamos hacer login con credenciales incorrectas
-    response = client.post(
-        "/api/auth/login",
-        data={"username": test_user["username"], "password": "wrongpassword"}
+        "/api/auth/me", headers={"Authorization": "Bearer not-a-valid-token"}
     )
     assert response.status_code == 401
 
 
-def test_invalid_token():
-    # Intentamos acceder a /api/auth/me con un token inválido
+def test_expired_token_is_rejected(client):
+    from modules.auth.auth_service import create_access_token
+
+    _register(client)
+    expired = create_access_token(
+        {"sub": "alice"}, expires_delta=timedelta(seconds=-1)
+    )
     response = client.get(
-        "/api/auth/me",
-        headers={"Authorization": "Bearer invalidtoken"}
+        "/api/auth/me", headers={"Authorization": f"Bearer {expired}"}
     )
     assert response.status_code == 401
 
 
-def test_role_authorization(test_user):
-    # Registramos un usuario con rol 'ciudadano'
-    register_response = client.post("/api/auth/register", json=test_user)
-    access_token = register_response.json()["access_token"]
-    
-    # Intentamos acceder a una ruta protegida por rol 'admin'
+def test_token_for_deleted_user_is_rejected(client):
+    _register(client)
+    token = _token(client)
+
+    from db.database import get_connection
+
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM users WHERE username = ?", ("alice",))
+        conn.commit()
+    finally:
+        conn.close()
+
     response = client.get(
-        "/api/admin/route",
-        headers={"Authorization": f"Bearer {access_token}"}
+        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
     )
+    assert response.status_code == 401
+
+
+def test_inactive_user_cannot_login_or_use_token(client):
+    _register(client)
+    token = _token(client)
+
+    from db.database import get_connection
+
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE users SET is_active = 0 WHERE username = ?", ("alice",))
+        conn.commit()
+    finally:
+        conn.close()
+
+    login_response = _login(client)
+    assert login_response.status_code in (400, 403)
+
+    me_response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert me_response.status_code == 403
+
+
+def test_token_identity_is_exact_and_not_shared(client):
+    _register(client, username="alice")
+    _register(client, username="bob")
+    alice_token = _token(client, username="alice")
+    bob_token = _token(client, username="bob")
+
+    alice_me = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {alice_token}"}
+    )
+    bob_me = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {bob_token}"}
+    )
+
+    assert alice_me.status_code == 200
+    assert alice_me.json()["username"] == "alice"
+    assert bob_me.status_code == 200
+    assert bob_me.json()["username"] == "bob"
+
+
+def test_refresh_token_flow(client):
+    _register(client)
+    refresh_token = _login(client).json()["refresh_token"]
+
+    response = client.post(
+        "/api/auth/refresh", json={"refresh_token": refresh_token}
+    )
+    assert response.status_code == 200
+    new_access = response.json()["access_token"]
+
+    me_response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {new_access}"}
+    )
+    assert me_response.status_code == 200
+    assert me_response.json()["username"] == "alice"
+
+
+def test_refresh_token_cannot_be_used_as_access_token(client):
+    _register(client)
+    refresh_token = _login(client).json()["refresh_token"]
+
+    response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {refresh_token}"}
+    )
+    assert response.status_code == 401
+
+
+# ── Roles ──────────────────────────────────────────────────────────────────
+
+def test_public_registration_cannot_assign_admin(client):
+    response = _register(client, role="admin")
     assert response.status_code == 403
 
-# Mock para simular la base de datos
-def mock_create_user(user: UserCreate):
-    hashed_password = get_password_hash(user.password)
-    return UserInDB(
-        username=user.username,
-        email=user.email,
-        hashed_password=hashed_password,
-        role=user.role,
-    )
+    from db.database import get_connection
 
-def mock_get_user(username: str):
-    if username == "testuser":
-        return UserInDB(
-            username="testuser",
-            email="test@example.com",
-            hashed_password=get_password_hash("testpassword"),
-            role="ciudadano",
-        )
-    return None
-
-# Sobrescribir las funciones de la base de datos con los mocks
-from modules.auth.auth_service import create_user, get_user
-
-create_user = mock_create_user
-get_user = mock_get_user
-
-# Sobrescribir las funciones de la base de datos en el módulo auth_service
-modules.auth.auth_service.create_user = mock_create_user
-modules.auth.auth_service.get_user = mock_get_user
-
-# Sobrescribir la función get_current_active_user en el módulo auth_service
-def mock_get_current_active_user(token: str = Depends(oauth2_scheme)):
-    return UserInDB(
-        username="testuser",
-        email="test@example.com",
-        hashed_password=get_password_hash("testpassword"),
-        role="ciudadano",
-    )
-
-modules.auth.auth_service.get_current_active_user = mock_get_current_active_user
-
-# Sobrescribir la función get_current_user en el módulo auth_service
-def mock_get_current_user(token: str = Depends(oauth2_scheme)):
-    return UserInDB(
-        username="testuser",
-        email="test@example.com",
-        hashed_password=get_password_hash("testpassword"),
-        role="ciudadano",
-    )
-
-modules.auth.auth_service.get_current_user = mock_get_current_user
-
-# Sobrescribir la función create_access_token en el módulo auth_service
-def mock_create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    return "mock_access_token"
-
-modules.auth.auth_service.create_access_token = mock_create_access_token
-
-# Sobrescribir la función create_refresh_token en el módulo auth_service
-def mock_create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
-    return "mock_refresh_token"
-
-modules.auth.auth_service.create_refresh_token = mock_create_refresh_token
-
-# Sobrescribir la función verify_password en el módulo auth_service
-def mock_verify_password(plain_password: str, hashed_password: str):
-    return plain_password == "testpassword"
-
-modules.auth.auth_service.verify_password = mock_verify_password
-
-# Sobrescribir la función get_password_hash en el módulo auth_service
-def mock_get_password_hash(password: str):
-    return "mock_hashed_password"
-
-modules.auth.auth_service.get_password_hash = mock_get_password_hash
-
-# Sobrescribir la función pwd_context en el módulo auth_service
-def mock_pwd_context():
-    return pwd_context
-
-modules.auth.auth_service.pwd_context = mock_pwd_context
-
-# Sobrescribir la función oauth2_scheme en el módulo auth_service
-def mock_oauth2_scheme():
-    return oauth2_scheme
-
-modules.auth.auth_service.oauth2_scheme = mock_oauth2_scheme
-
-# Sobrescribir la función TokenData en el módulo auth_service
-def mock_TokenData(username: Optional[str] = None):
-    return TokenData(username=username)
-
-modules.auth.auth_service.TokenData = mock_TokenData
-
-# Sobrescribir la función User en el módulo auth_service
-def mock_User(username: str, email: Optional[str] = None, role: str = "ciudadano"):
-    return User(username=username, email=email, role=role)
-
-modules.auth.auth_service.User = mock_User
-
-# Sobrescribir la función UserInDB en el módulo auth_service
-def mock_UserInDB(username: str, email: Optional[str] = None, hashed_password: str = "", role: str = "ciudadano"):
-    return UserInDB(username=username, email=email, hashed_password=hashed_password, role=role)
-
-modules.auth.auth_service.UserInDB = mock_UserInDB
-
-# Sobrescribir la función UserCreate en el módulo auth_service
-def mock_UserCreate(username: str, email: str, password: str, role: str = "ciudadano"):
-    return UserCreate(username=username, email=email, password=password, role=role)
-
-modules.auth.auth_service.UserCreate = mock_UserCreate
-
-# Sobrescribir la función Token en el módulo auth_service
-def mock_Token(access_token: str, token_type: str):
-    return Token(access_token=access_token, token_type=token_type)
-
-modules.auth.auth_service.Token = mock_Token
-
-client = TestClient(app)
-
-@pytest.fixture
-def test_user():
-    return {
-        "username": "testuser",
-        "email": "test@example.com",
-        "password": "testpassword",
-        "role": "ciudadano"
-    }
-
-def test_register(test_user):
-    response = client.post("/api/auth/register", json=test_user)
-    assert response.status_code == 201
-    assert "access_token" in response.json()
-    assert "refresh_token" in response.json()
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM users WHERE username = ?", ("alice",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is None
 
 
-def test_login(test_user):
-    # Primero registramos un usuario
-    client.post("/api/auth/register", json=test_user)
-    
-    # Luego intentamos hacer login
+def test_public_registration_cannot_assign_organizer(client):
+    response = _register(client, role="organizador")
+    assert response.status_code == 403
+
+
+def test_admin_can_create_privileged_user(client):
+    _create_user("root", "admin")
+    admin_token = _token(client, username="root")
+
     response = client.post(
-        "/api/auth/login",
-        data={"username": test_user["username"], "password": test_user["password"]}
+        "/api/auth/users",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "username": "coord",
+            "email": "coord@example.invalid",
+            "password": "password123",
+            "role": "organizador",
+        },
     )
-    assert response.status_code == 200
-    assert "access_token" in response.json()
+    assert response.status_code == 201, response.text
+    assert response.json()["role"] == "organizador"
 
 
-def test_me(test_user):
-    # Registramos un usuario
-    register_response = client.post("/api/auth/register", json=test_user)
-    access_token = register_response.json()["access_token"]
-    
-    # Obtenemos información del usuario
-    response = client.get(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {access_token}"}
-    )
-    assert response.status_code == 200
-    assert response.json()["username"] == test_user["username"]
+def test_non_admin_cannot_create_privileged_user(client):
+    _register(client)
+    citizen_token = _token(client)
 
-
-def test_refresh_token(test_user):
-    # Registramos un usuario
-    register_response = client.post("/api/auth/register", json=test_user)
-    refresh_token = register_response.json()["refresh_token"]
-    
-    # Refrescamos el token
     response = client.post(
-        "/api/auth/refresh",
-        json={"refresh_token": refresh_token}
-    )
-    assert response.status_code == 200
-    assert "access_token" in response.json()
-
-
-def test_invalid_credentials(test_user):
-    # Intentamos hacer login con credenciales incorrectas
-    response = client.post(
-        "/api/auth/login",
-        data={"username": test_user["username"], "password": "wrongpassword"}
-    )
-    assert response.status_code == 401
-
-
-def test_invalid_token():
-    # Intentamos acceder a /api/auth/me con un token inválido
-    response = client.get(
-        "/api/auth/me",
-        headers={"Authorization": "Bearer invalidtoken"}
-    )
-    assert response.status_code == 401
-
-
-def test_role_authorization(test_user):
-    # Registramos un usuario con rol 'ciudadano'
-    register_response = client.post("/api/auth/register", json=test_user)
-    access_token = register_response.json()["access_token"]
-    
-    # Intentamos acceder a una ruta protegida por rol 'admin'
-    response = client.get(
-        "/api/admin/route",
-        headers={"Authorization": f"Bearer {access_token}"}
+        "/api/auth/users",
+        headers={"Authorization": f"Bearer {citizen_token}"},
+        json={
+            "username": "coord",
+            "email": "coord@example.invalid",
+            "password": "password123",
+            "role": "organizador",
+        },
     )
     assert response.status_code == 403

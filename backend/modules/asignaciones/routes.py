@@ -9,7 +9,9 @@ Endpoints:
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from modules.auth.auth_service import require_roles
 
 from modules.asignaciones.models import (
     AssignmentValidationError,
@@ -27,7 +29,11 @@ from modules.asignaciones.services import (
 router = APIRouter(prefix="/api/assignments", tags=["assignments"])
 
 
-@router.post("", status_code=201)
+@router.post(
+    "",
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_assignment_endpoint(assignment: AssignmentCreate):
     """Crea una asignación de recurso a necesidad.
 
@@ -87,7 +93,10 @@ def get_assignment_endpoint(assignment_id: int):
     return {"ok": True, "assignment": assignment}
 
 
-@router.patch("/{assignment_id}")
+@router.patch(
+    "/{assignment_id}",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def update_assignment_endpoint(assignment_id: int, update: AssignmentUpdate):
     """Cambia el estado de una asignación.
 

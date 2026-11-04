@@ -1,7 +1,8 @@
 """Action Area API endpoints."""
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from modules.auth.auth_service import require_roles
 from services.action_area import (
     compute_action_area, store_action_area,
     get_action_areas_for_incident, get_action_areas_in_h3,
@@ -21,7 +22,11 @@ class ActionAreaCreate(BaseModel):
     custom_radius_km: Optional[float] = None
 
 
-@router.post("", status_code=201)
+@router.post(
+    "",
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create_action_area(data: ActionAreaCreate):
     """Compute and store an action area."""
     return store_action_area(
@@ -36,7 +41,10 @@ def create_action_area(data: ActionAreaCreate):
     )
 
 
-@router.post("/compute")
+@router.post(
+    "/compute",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def compute_area(data: ActionAreaCreate):
     """Compute action area without storing."""
     return compute_action_area(

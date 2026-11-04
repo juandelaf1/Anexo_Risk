@@ -1,5 +1,5 @@
 // Ayudas section — initDonaciones, loadNecesidadesParaAyuda, loadDonaciones, selectNeed, assignments
-import { API_BASE, apiGet, escapeHtml } from "../shared/config.js";
+import { API_BASE, apiGet, apiPost, escapeHtml } from "../shared/config.js";
 
 export function initDonaciones() {
   const form = document.getElementById("form-donacion");
@@ -203,15 +203,7 @@ export function initDonaciones() {
       }
 
       try {
-        const resp = await fetch(`${API_BASE}/api/assignments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ need_id: needId, resource_id: parseInt(resourceId), quantity_assigned: qty }),
-        });
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          throw new Error(err.detail || `Error ${resp.status}`);
-        }
+        await apiPost("/api/assignments", { need_id: needId, resource_id: parseInt(resourceId), quantity_assigned: qty });
         modal.remove();
         await Promise.all([loadNecesidadesParaAyuda(), loadAssignments()]);
       } catch (err) {
@@ -238,15 +230,7 @@ export function initDonaciones() {
       submitBtn.disabled = true;
       submitBtn.textContent = "Enviando...";
       try {
-        const resp = await fetch(`${API_BASE}/api/donaciones`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          throw new Error(err.detail || `Error ${resp.status}`);
-        }
+        await apiPost("/api/donaciones", payload);
         form.reset();
         counterEl.textContent = "0 / 1000";
         campoDni.style.display = "none";

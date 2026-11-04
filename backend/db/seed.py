@@ -14,11 +14,36 @@ def seed() -> None:
 
     init_db()
     with get_cursor() as cursor:
+        cursor.execute("DELETE FROM operational_users")
+        cursor.execute("DELETE FROM organizations")
         cursor.execute("DELETE FROM necesidades")
         cursor.execute("DELETE FROM voluntario_documentos")
         cursor.execute("DELETE FROM voluntarios")
         cursor.execute("DELETE FROM donaciones")
         cursor.execute("DELETE FROM personas")
+
+        cursor.execute(
+            "INSERT INTO organizations (name, type, region) VALUES (?, ?, ?)",
+            ("Proteccion Civil Valencia", "proteccion_civil", "Valencia"),
+        )
+        org_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO operational_users (organization_id, username, display_name, role) VALUES (?, ?, ?, ?)",
+            (org_id, "operador_demo", "Operador Demo", "operador"),
+        )
+
+        cursor.execute(
+            """INSERT OR REPLACE INTO source_registry
+            (id, name, scope, source_type, data_types, status)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            ("usgs", "USGS Earthquakes", "global", "api", '["earthquake"]', "active"),
+        )
+        cursor.execute(
+            """INSERT OR REPLACE INTO source_registry
+            (id, name, scope, source_type, data_types, status)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            ("gdacs", "GDACS Alerts", "global", "api", '["alert"]', "active"),
+        )
 
         # Estos registros respetan el mismo contrato que usará el formulario
         # simplificado. Cubren las 8 categorías cerradas y los dos estados

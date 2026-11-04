@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
-from middleware.auth import requiere_clave_organizador
+
+from modules.auth.auth_service import require_roles
 
 from modules.organizaciones.models import (
     create_organization,
@@ -39,7 +40,12 @@ def get_org(org_id: int):
     return org
 
 
-@router.post("", response_model=OrganizationResponse, status_code=201, dependencies=[Depends(get_current_active_user)])
+@router.post(
+    "",
+    response_model=OrganizationResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def create_org(data: OrganizationCreate):
     return create_organization(data.name, data.type, data.region)
 
@@ -49,7 +55,12 @@ def list_users(org_id: int, role: str | None = None):
     return list_operational_users(org_id=org_id, role=role)
 
 
-@router.post("/{org_id}/users", response_model=OperationalUserResponse, status_code=201, dependencies=[Depends(get_current_active_user)])
+@router.post(
+    "/{org_id}/users",
+    response_model=OperationalUserResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def create_user(org_id: int, data: OperationalUserCreate):
     org = get_organization(org_id)
     if not org:
@@ -62,7 +73,10 @@ class RegionAccessGrant(BaseModel):
     access_level: str = "read"
 
 
-@router.post("/{org_id}/region-access")
+@router.post(
+    "/{org_id}/region-access",
+    dependencies=[Depends(require_roles("admin"))],
+)
 def grant_access(org_id: int, data: RegionAccessGrant):
     """Grant organization access to a region."""
     org = get_organization(org_id)
@@ -72,7 +86,10 @@ def grant_access(org_id: int, data: RegionAccessGrant):
     return {"org_id": org_id, "region_id": data.region_id, "access_level": data.access_level}
 
 
-@router.delete("/{org_id}/region-access/{region_id}")
+@router.delete(
+    "/{org_id}/region-access/{region_id}",
+    dependencies=[Depends(require_roles("admin"))],
+)
 def revoke_access(org_id: int, region_id: str):
     """Revoke organization access to a region."""
     revoke_region_access(org_id, region_id)

@@ -4,9 +4,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from sync.sync_controller import router, get_db
+from modules.auth.auth_service import User, get_current_active_user, get_current_user
 
 app = FastAPI()
 app.include_router(router)
+
+def _fake_sync_user():
+    return User(username="sync-test", email="sync@example.invalid", role="admin", is_active=True)
+
+app.dependency_overrides[get_current_active_user] = _fake_sync_user
+app.dependency_overrides[get_current_user] = _fake_sync_user
 client = TestClient(app)
 
 # FIX: Create a single persistent in-memory database connection for the entire test run.

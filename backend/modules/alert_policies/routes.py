@@ -1,7 +1,8 @@
 """Alert Policy API endpoints."""
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
+from modules.auth.auth_service import require_roles
 from services.alert_policy import (
     create_policy, get_policy, list_policies,
     evaluate_policy, get_evaluations,
@@ -32,7 +33,11 @@ class EvaluateRequest(BaseModel):
     event_id: Optional[str] = None
 
 
-@router.post("", status_code=201)
+@router.post(
+    "",
+    status_code=201,
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def create(data: PolicyCreate):
     """Create an alert policy."""
     return create_policy(data.model_dump())
@@ -54,7 +59,10 @@ def get_one(policy_id: str):
     return policy
 
 
-@router.post("/{policy_id}/evaluate")
+@router.post(
+    "/{policy_id}/evaluate",
+    dependencies=[Depends(require_roles("organizador", "admin"))],
+)
 def evaluate(policy_id: str, data: EvaluateRequest):
     """Evaluate a policy against conditions (dry-run by default)."""
     result = evaluate_policy(

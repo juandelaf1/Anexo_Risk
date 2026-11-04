@@ -13,16 +13,20 @@ from fastapi.testclient import TestClient
 import pytest
 
 from integrations import gdacs_client
-from modules.alertas import services
+from db.database import get_cursor
 from main import app
 
 
 @pytest.fixture(autouse=True)
 def reset_gdacs_cache():
-    """Resets GDACS client cache and local database before each test execution."""
+    """Resets GDACS client cache and persisted alerts before each test."""
     gdacs_client.clear_cache()
-    with services._DB_LOCK:
-        services.LOCAL_ALERTS_DB.clear()
+    try:
+        with get_cursor() as cursor:
+            cursor.execute("DELETE FROM alertas")
+    except Exception:
+        # La tabla puede no existir todavía en una base recién creada.
+        pass
     yield
 
 

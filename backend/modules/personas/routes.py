@@ -5,8 +5,10 @@ a la base de datos se delega en ``models.py`` y la validación de entrada y
 salida en ``schemas.py``.
 """
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
+
+from modules.auth.auth_service import require_roles
 
 from modules.personas import models
 from modules.personas.models import mark_person_safe
@@ -31,6 +33,7 @@ def list_personas(q: str | None = Query(None)):
 @router.post(
     "/estoy-bien",
     response_model=PersonResponse,
+    dependencies=[Depends(require_roles("ciudadano", "organizador", "admin"))],
     responses={
         status.HTTP_404_NOT_FOUND: {
             "description": "Persona no encontrada",
@@ -69,6 +72,7 @@ def mark_safe_endpoint(request: PersonSafeRequest):
     "/",
     response_model=PersonResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("ciudadano", "organizador", "admin"))],
 )
 def create_persona(payload: PersonCreate):
     return models.create_persona(

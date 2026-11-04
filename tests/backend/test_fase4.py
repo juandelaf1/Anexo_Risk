@@ -56,6 +56,9 @@ class TestRegionSourceResolution:
 
     def test_get_sources_for_region(self):
         from services.region_source_resolution import get_sources_for_region
+        # Ensure global sources exist in the registry
+        client.post("/api/sources", json={"id": "usgs", "name": "USGS Earthquakes", "scope": "global", "status": "active"})
+        client.post("/api/sources", json={"id": "gdacs", "name": "GDACS Alerts", "scope": "global", "status": "active"})
         rid = _uid()
         client.post("/api/regions", json={"id": rid, "name": "Test", "country_code": "ES"})
         sources = get_sources_for_region(rid)
