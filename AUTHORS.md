@@ -44,7 +44,7 @@ aparecen en el historial de commits.
 
 ## Evolución 2.x
 
-Trabajo y experimentación posterior de Juan de la Fuente.
+Trabajo y experimentación posterior de Juan de la Fuente; mantenimiento/evolución continua del fork (2026-).
 
 Commits en la rama `feat/v2-mejoras` (evolución individual):
 
