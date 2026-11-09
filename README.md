@@ -6,7 +6,7 @@ Plataforma geoespacial de apoyo a la decisión para centros y organismos de coor
 
 Este repositorio es una evolución de un MVP académico desarrollado colaborativamente por el equipo Nexo (Dana de Valencia — Universitat Politècnica de València, 2024-2025).
 
-El historial Git completo conserva la atribución de todos los contribuidores originales. Ver [AUTHORS.md](AUTHORS.md) para más detalles.
+El historial Git completo conserva la atribución de todos los contribuidores originales. Ver [AUTHORS.md](AUTHORS.md) y [LICENSE](LICENSE) (MIT). Mantenimiento/evolución del fork: **Juan de la Fuente** (2026-), preservando atribución.
 
 ## Evolución 2.x
 
@@ -120,3 +120,5 @@ Nota: licencia provisional para la fase académica. Antes de abrir el proyecto a
 ## Seguridad
 
 Ver [docs/security-repository.md](docs/security-repository.md) para políticas de seguridad del repositorio.
+
+**Hardening incremental (2026, fork):** D1 aplicado en voluntariado (auth en listado, aprobación/rechazo email por confirmación+POST sin mutación GET con token en URL, token de disponibilidad solo en cabecera; redacción de tokens en logs dummy) con tests de regresión. Donaciones: respuestas públicas verificadas como PII-safe. Ver `docs/audit/D1_AUTH_PII_MATRIX_SOLO_MATRIZ.md`. Pendiente backlog “completo” (retención/minimización/cifrado/auditoría accesos PII).
