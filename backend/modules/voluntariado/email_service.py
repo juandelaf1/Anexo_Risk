@@ -33,20 +33,24 @@ def _build_document_list(documents: list[dict[str, Any]]) -> str:
     )
 
 
+def _redact_sensitive(text: str) -> str:
+    import re
+    # Redact tokens in URLs/bodies for dummy logs (dev hygiene, D1)
+    text = re.sub(r"([?&]token=)[^&\s]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(X-Volunteer-Token:\s*)[^\s]+", r"\1[REDACTED]", text, flags=re.IGNORECASE)
+    return text
+
+
 def _deliver_email(to_email: str, subject: str, body: str) -> None:
     if EMAIL_DUMMY_MODE:
-        logger.info(
-            "EMAIL DUMMY\nTo: %s\nSubject: %s\n\n%s",
-            to_email,
-            subject,
-            body,
-        )
-        print(f"\n=== EMAIL DUMMY ===\nPara: {to_email}\nAsunto: {subject}\n\n{body}\n")
+        redacted = _redact_sensitive(body)
+        logger.info("EMAIL DUMMY to=%s subject=%s (body redacted in log)", to_email, subject)
+        print(f"\n=== EMAIL DUMMY ===\nPara: {to_email}\nAsunto: {subject}\n\n{redacted}\n")
         EMAIL_LOG_DIR.mkdir(parents=True, exist_ok=True)
         safe_name = to_email.replace("@", "_at_").replace(".", "_")
         log_file = EMAIL_LOG_DIR / f"{safe_name}.txt"
         log_file.write_text(
-            f"Para: {to_email}\nAsunto: {subject}\n\n{body}",
+            f"Para: {to_email}\nAsunto: {subject}\n\n{redacted}",
             encoding="utf-8",
         )
         return
