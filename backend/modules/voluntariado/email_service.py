@@ -91,16 +91,23 @@ def send_admin_new_volunteer_email(
 def send_volunteer_approved_email(
     volunteer: dict[str, Any],
     availability_url: str,
+    volunteer_token: str = "",
 ) -> None:
-    """Confirma al voluntario que su solicitud ha sido aprobada."""
+    """Confirma aprobación. No incluye token en URL (evitar leakage en logs/referers)."""
 
     subject = "[Anexo Risk] Tu solicitud de voluntariado ha sido aprobada"
+    token_line = (
+        f"Cabecera requerida: X-Volunteer-Token: {volunteer_token}\n"
+        if volunteer_token
+        else "Contacta con el equipo organizador para recibir tu token de acceso.\n"
+    )
     body = (
         f"Hola {volunteer['nombre']},\n\n"
         "Tu solicitud de voluntariado en Anexo Risk ha sido aprobada.\n"
         "Ya puedes aparecer como disponible o no disponible en la app.\n\n"
-        "Para marcar tu disponibilidad activa usa este enlace o la API:\n"
-        f"{availability_url}\n\n"
+        f"Endpoint: PATCH {availability_url}\n"
+        f"{token_line}"
+        "Ejemplo: PATCH con JSON {\"disponible\": true} y la cabecera anterior.\n\n"
         "Gracias por colaborar."
     )
     _deliver_email(volunteer["contacto"], subject, body)

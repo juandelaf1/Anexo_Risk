@@ -1,0 +1,228 @@
+﻿diff --git a/backend/modules/voluntariado/email_service.py b/backend/modules/voluntariado/email_service.py
+index e76a5fc..42734b4 100644
+--- a/backend/modules/voluntariado/email_service.py
++++ b/backend/modules/voluntariado/email_service.py
+@@ -91,16 +91,23 @@ def send_admin_new_volunteer_email(
+ def send_volunteer_approved_email(
+     volunteer: dict[str, Any],
+     availability_url: str,
++    volunteer_token: str = "",
+ ) -> None:
+-    """Confirma al voluntario que su solicitud ha sido aprobada."""
++    """Confirma aprobaci├│n. No incluye token en URL (evitar leakage en logs/referers)."""
+ 
+     subject = "[Anexo Risk] Tu solicitud de voluntariado ha sido aprobada"
++    token_line = (
++        f"Cabecera requerida: X-Volunteer-Token: {volunteer_token}\n"
++        if volunteer_token
++        else "Contacta con el equipo organizador para recibir tu token de acceso.\n"
++    )
+     body = (
+         f"Hola {volunteer['nombre']},\n\n"
+         "Tu solicitud de voluntariado en Anexo Risk ha sido aprobada.\n"
+         "Ya puedes aparecer como disponible o no disponible en la app.\n\n"
+-        "Para marcar tu disponibilidad activa usa este enlace o la API:\n"
+-        f"{availability_url}\n\n"
++        f"Endpoint: PATCH {availability_url}\n"
++        f"{token_line}"
++        "Ejemplo: PATCH con JSON {\"disponible\": true} y la cabecera anterior.\n\n"
+         "Gracias por colaborar."
+     )
+     _deliver_email(volunteer["contacto"], subject, body)
+diff --git a/backend/modules/voluntariado/routes.py b/backend/modules/voluntariado/routes.py
+index b986301..4e2018f 100644
+--- a/backend/modules/voluntariado/routes.py
++++ b/backend/modules/voluntariado/routes.py
+@@ -7,6 +7,7 @@ import json
+ 
+ from fastapi import (
+     APIRouter,
++    Body,
+     Depends,
+     Header,
+     Query,
+@@ -14,8 +15,8 @@ from fastapi import (
+     UploadFile,
+     status,
+ )
+-from fastapi.responses import JSONResponse
+-from pydantic import ValidationError
++from fastapi.responses import HTMLResponse, JSONResponse
++from pydantic import BaseModel, Field, ValidationError
+ 
+ from middleware.auth import requiere_clave_organizador
+ from modules.voluntariado.file_service import InvalidVolunteerDocument
+@@ -55,19 +56,52 @@ def _error_response(status_code: int, error: str, detalle: str) -> JSONResponse:
+     )
+ 
+ 
++class EmailActionToken(BaseModel):
++    token: str = Field(min_length=10, max_length=512)
++
++
++def _confirmation_page(action: str, volunteer_id: int, token: str) -> str:
++    # token is embedded for POST body submission (not in mutation URL/query to server logs beyond initial GET);
++    # action is performed via POST. Keep page minimal (no external deps).
++    safe_action = "aprobar" if action == "aprobar" else "rechazar"
++    label = "Aprobar" if action == "aprobar" else "Rechazar"
++    import html
++    t = html.escape(token, quote=True)
++    return f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Confirmar {label}</title></head>
++<body><h3>Confirmar acci├│n: {label} voluntario #{volunteer_id}</h3>
++<p>Por seguridad, la acci├│n se ejecuta mediante POST (no con un simple enlace GET).</p>
++<button id="go">{label}</button> <span id="out"></span>
++<script>
++document.getElementById('go').onclick = async () => {{
++  const out = document.getElementById('out'); out.textContent = 'Procesando...';
++  try {{
++    const r = await fetch('/api/voluntarios/{volunteer_id}/{safe_action}-email', {{
++      method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{token: "{t}"}})
++    }});
++    const d = await r.json().catch(()=>({{}}));
++    out.textContent = r.ok ? (d.mensaje || 'OK') : (d.detalle || d.error || 'Error');
++  }} catch(e) {{ out.textContent = 'Error de red'; }}
++}};
++</script></body></html>"""
++
++
+ def _normalize_uploads(documentos: list[UploadFile] | None) -> list[UploadFile]:
+     if not documentos:
+         return []
+     return [upload for upload in documentos if upload.filename]
+ 
+ 
+-@router.get("", response_model=list[VolunteerFrontendResponse])
++@router.get(
++    "",
++    response_model=list[VolunteerFrontendResponse],
++    dependencies=[Depends(get_current_active_user)],
++)
+ def get_volunteers(
+     coordination_status: str | None = Query(default=None, alias="status"),
+     skill: str | None = Query(default=None, alias="habilidad"),
+     is_available: bool | None = Query(default=None, alias="disponible"),
+ ):
+-    """Devuelve voluntarios aprobados visibles en la app."""
++    """Devuelve voluntarios aprobados (requiere autenticaci├│n; minimizaci├│n PII)."""
+ 
+     return list_volunteers_for_frontend(
+         coordination_status=coordination_status,
+@@ -175,55 +209,47 @@ async def create_new_volunteer(request: Request):
+         )
+ 
+ 
+-@router.get("/{volunteer_id}/aprobar", response_model=VolunteerActionResponse)
+-def approve_volunteer_from_email(
+-    volunteer_id: int,
+-    token: str = Query(...),
+-):
+-    """Aprueba una solicitud desde el enlace enviado al administrador."""
++@router.get("/{volunteer_id}/aprobar", response_class=HTMLResponse)
++def approve_volunteer_from_email_page(volunteer_id: int, token: str = Query(...)):
++    """P├ígina de confirmaci├│n (no muta estado por GET). La acci├│n real se ejecuta v├¡a POST con token en cuerpo."""
++    return HTMLResponse(_confirmation_page("aprobar", volunteer_id, token))
+ 
+-    result = services.approve_volunteer(
+-        volunteer_id,
+-        admin_token=token,
+-        via_api=False,
+-    )
++
++@router.get("/{volunteer_id}/rechazar", response_class=HTMLResponse)
++def reject_volunteer_from_email_page(volunteer_id: int, token: str = Query(...)):
++    """P├ígina de confirmaci├│n (no muta estado por GET). La acci├│n real se ejecuta v├¡a POST con token en cuerpo."""
++    return HTMLResponse(_confirmation_page("rechazar", volunteer_id, token))
++
++
++@router.post("/{volunteer_id}/aprobar-email", response_model=VolunteerActionResponse)
++def approve_volunteer_from_email_confirm(volunteer_id: int, payload: EmailActionToken):
++    """Ejecuta aprobaci├│n desde confirmaci├│n (token en cuerpo, no en query)."""
++    result = services.approve_volunteer(volunteer_id, admin_token=payload.token, via_api=False)
+     if result.get("error") == "not_found":
+         return _error_response(
+-            status.HTTP_404_NOT_FOUND,
+-            "Solicitud no encontrada",
++            status.HTTP_404_NOT_FOUND, "Solicitud no encontrada",
+             f"No existe una solicitud v├ílida con el identificador {volunteer_id}.",
+         )
+     if result.get("error") == "invalid_transition":
+         return _error_response(
+-            status.HTTP_409_CONFLICT,
+-            "Transici├│n no v├ílida",
++            status.HTTP_409_CONFLICT, "Transici├│n no v├ílida",
+             "La solicitud ya no est├í pendiente de validaci├│n.",
+         )
+     return result
+ 
+ 
+-@router.get("/{volunteer_id}/rechazar", response_model=VolunteerActionResponse)
+-def reject_volunteer_from_email(
+-    volunteer_id: int,
+-    token: str = Query(...),
+-):
+-    """Rechaza una solicitud desde el enlace enviado al administrador."""
+-
+-    result = services.reject_volunteer(
+-        volunteer_id,
+-        admin_token=token,
+-        via_api=False,
+-    )
++@router.post("/{volunteer_id}/rechazar-email", response_model=VolunteerActionResponse)
++def reject_volunteer_from_email_confirm(volunteer_id: int, payload: EmailActionToken):
++    """Ejecuta rechazo desde confirmaci├│n (token en cuerpo, no en query)."""
++    result = services.reject_volunteer(volunteer_id, admin_token=payload.token, via_api=False)
+     if result.get("error") == "not_found":
+         return _error_response(
+-            status.HTTP_404_NOT_FOUND,
+-            "Solicitud no encontrada",
++            status.HTTP_404_NOT_FOUND, "Solicitud no encontrada",
+             f"No existe una solicitud v├ílida con el identificador {volunteer_id}.",
+         )
+     if result.get("error") == "invalid_transition":
+         return _error_response(
+-            status.HTTP_409_CONFLICT,
+-            "Transici├│n no v├ílida",
++            status.HTTP_409_CONFLICT, "Transici├│n no v├ílida",
+             "La solicitud ya no est├í pendiente de validaci├│n.",
+         )
+     return result
+@@ -315,16 +341,15 @@ def update_volunteer_availability(
+     volunteer_id: int,
+     update: VolunteerAvailabilityUpdate,
+     x_volunteer_token: str | None = Header(default=None, alias="X-Volunteer-Token"),
+-    token: str | None = Query(default=None),
+ ):
+-    """Permite al voluntario aprobado marcar si est├í disponible o no."""
++    """Permite al voluntario aprobado marcar disponibilidad (token solo en cabecera, no en URL)."""
+ 
+-    volunteer_token = x_volunteer_token or token
++    volunteer_token = x_volunteer_token
+     if volunteer_token is None:
+         return _error_response(
+             status.HTTP_401_UNAUTHORIZED,
+             "Token requerido",
+-            "Debes enviar X-Volunteer-Token o el par├ímetro token.",
++            "Debes enviar la cabecera X-Volunteer-Token.",
+         )
+ 
+     try:
+diff --git a/backend/modules/voluntariado/services.py b/backend/modules/voluntariado/services.py
+index 794bae5..239fd8e 100644
+--- a/backend/modules/voluntariado/services.py
++++ b/backend/modules/voluntariado/services.py
+@@ -155,13 +155,11 @@ def approve_volunteer(
+     if approved is None:
+         return {"error": "not_found"}
+ 
+-    availability_url = (
+-        f"{BASE_URL}/api/voluntarios/{volunteer_id}/disponible"
+-        f"?token={approved['volunteer_token']}"
+-    )
++    availability_url = f"{BASE_URL}/api/voluntarios/{volunteer_id}/disponible"
+     email_service.send_volunteer_approved_email(
+         volunteer=approved,
+         availability_url=availability_url,
++        volunteer_token=approved.get("volunteer_token", ""),
+     )
+ 
+     return {

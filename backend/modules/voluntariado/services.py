@@ -155,13 +155,11 @@ def approve_volunteer(
     if approved is None:
         return {"error": "not_found"}
 
-    availability_url = (
-        f"{BASE_URL}/api/voluntarios/{volunteer_id}/disponible"
-        f"?token={approved['volunteer_token']}"
-    )
+    availability_url = f"{BASE_URL}/api/voluntarios/{volunteer_id}/disponible"
     email_service.send_volunteer_approved_email(
         volunteer=approved,
         availability_url=availability_url,
+        volunteer_token=approved.get("volunteer_token", ""),
     )
 
     return {
