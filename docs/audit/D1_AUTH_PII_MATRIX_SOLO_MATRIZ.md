@@ -21,5 +21,7 @@
 - `DonationResponse` ya excluye PII sensible — preservar este patrón.
 - Cualquier fix debe incluir **tests** (API/seguridad), no romper contratos deliberadamente, y mantener atribución P7 (Equipo Nexo, MIT).
 
-## Próximo paso (requiere confirmación)
-Confirmar: `D1: solo matriz` (completo como doc) / `D1: matriz+fixes 1,4,5` / `D1: completo`. Indicar si aplicar **directo en fork** o generar **patch/diff** para revisión. Tras confirmación: implementar fixes mínimos + tests + revisión de contratos.
+## Estado de implementación (2026-11-09)
+- **Aplicado y pusheado** en `feature/auth-jwt` (`juandelaf1/Anexo_Risk`): fixes **1,4,5** + redacción de tokens en logs dummy (`c3b55a7`,`7bfbedd`). Tests voluntariado **110 passed** (incl. 7 seguridad D1). Cambios no commiteados en tiempo de parche → ya commiteados.
+- **D1-5 (donaciones):** `GET /api/donaciones` y `GET /{id}` públicos pero **`DonationResponse` omite `contacto`/`DNI`**; verificado por `tests/backend/test_donaciones_security.py` (**4 passed**). No se añadió auth de lectura para evitar romper contrato (riesgo residual bajo con respuesta PII-safe).
+- **Pendiente (“completo” profundo, backlog aprobado/escalable):** retención/minimización/cifrado, auditoría de accesos a registros con PII, revisión de logs/exports/admin y controles transversales; ejecutar con plan incremental + tests.
